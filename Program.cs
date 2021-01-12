@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 
 namespace SafeCracker
 {
@@ -199,13 +200,20 @@ namespace SafeCracker
 		private static void Main()
 		{
 			var stopwatch = new Stopwatch();
-			stopwatch.Start();
-			try
-			{
-				PrintResult(GetAllPermutations().FirstOrDefault(permutation => AllSumTo(permutation, TARGET_VALUE)));
-			}
-			catch { }
-			stopwatch.Stop();
+			var thread = new Thread(() =>
+				{
+					stopwatch.Start();
+					try
+					{
+						PrintResult(GetAllPermutations().FirstOrDefault(permutation => AllSumTo(permutation, TARGET_VALUE)));
+					}
+					catch { }
+					stopwatch.Stop();
+				},
+				int.MaxValue
+			);
+			thread.Start();
+			thread.Join();
 			Console.WriteLine($"Finished in {stopwatch.Elapsed}");
 			Console.ReadKey();
 		}
@@ -225,20 +233,22 @@ namespace SafeCracker
 
 		private static IEnumerable<IEnumerable<int>> GetAllRotations()
 		{
-			return GetAllRotationsUpTo(GetCompleteRings().Count() - 1)
-				.Select(rotation => Enumerable.Range(0, 1).Concat(rotation));
+			IEnumerable<int>? nextRotation = Enumerable.Repeat(0, 5);
+			while (nextRotation != null)
+			{
+				yield return nextRotation;
+				nextRotation = GetNextRotation(nextRotation);
+			}
 		}
 
-		private static IEnumerable<IEnumerable<int>> GetAllRotationsUpTo(int count)
+		private static IEnumerable<int>? GetNextRotation(IEnumerable<int> nextRotation)
 		{
-			return GetAllRotationsUpTo(Enumerable.Repeat(Enumerable.Empty<int>(), 1), count);
-		}
-
-		private static IEnumerable<IEnumerable<int>> GetAllRotationsUpTo(IEnumerable<IEnumerable<int>> rotationsSoFar, int count)
-		{
-			if (count == 0) { return rotationsSoFar; }
-			var newRotations = rotationsSoFar.SelectMany(rotations => Enumerable.Range(0, RING_SIZE).Select(rotation => rotations.Append(rotation)));
-			return GetAllRotationsUpTo(newRotations, count - 1);
+			if (nextRotation.Count() < 2) { return null; }
+			if (nextRotation.Last() == RING_SIZE - 1)
+			{
+				return GetNextRotation(nextRotation.Take(nextRotation.Count() - 1))?.Append(0);
+			}
+			return nextRotation.Take(nextRotation.Count() - 1).Append(nextRotation.Last() + 1);
 		}
 
 		private static bool AllSumTo(IEnumerable<IEnumerable<int>> permutation, int targetValue)
@@ -256,7 +266,7 @@ namespace SafeCracker
 
 		private static IEnumerable<T> GetNthValueFromEachRow<T>(IEnumerable<IEnumerable<T>> table, int i)
 		{
-			foreach (var row in table)
+			foreach (IEnumerable<T> row in table)
 			{
 				yield return row.Skip(i).First();
 			}
